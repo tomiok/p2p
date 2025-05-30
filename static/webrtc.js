@@ -1,9 +1,11 @@
-// webrtc.js - Multi-participant con controles reales funcionando
+// webrtc.js - Multi-participant con nombres de usuario
 class VideoCall {
-    constructor(roomId) {
+    constructor(roomId, userName = '') {
         this.roomId = roomId;
+        this.userName = userName; // ← NUEVO: Nombre del usuario
         this.ws = null;
-        this.peers = new Map(); // Map de peerID -> { pc, stream, isLocal, retryCount, connectionTimer }
+        this.peers = new Map(); // Map de peerID -> { pc, stream, isLocal, retryCount, connectionTimer, displayName }
+        this.peerNames = new Map(); // ← NUEVO: Map de peerID -> nombre
         this.localStream = null;
         this.myPeerId = null;
         this.serverParticipantCount = 1; // Conteo autoritativo del servidor
@@ -46,7 +48,6 @@ class VideoCall {
         this.isCamOn = true;
         this.debug = true;
 
-        // === NUEVAS PROPIEDADES PARA CONTROLES ===
         this.isHangingUp = false;
     }
 
@@ -56,9 +57,32 @@ class VideoCall {
         }
     }
 
+    // === NUEVAS FUNCIONES PARA MANEJO DE NOMBRES (SIMPLIFICADAS) ===
+
+    /**
+     * Obtener nombre para mostrar
+     */
+    getDisplayName(peerId, isLocal = false) {
+        if (isLocal) {
+            return `${this.userName} (Tú)`;
+        }
+
+        // Buscar nombre en nuestro mapa
+        const name = this.peerNames.get(peerId);
+        return name || `Participante ${peerId.slice(-4)}`;
+    }
+
+    /**
+     * Establecer nombre de un peer
+     */
+    setPeerName(peerId, name) {
+        this.peerNames.set(peerId, name);
+        this.log(`📛 Nombre establecido para ${peerId}: ${name}`);
+    }
+
     async init() {
         try {
-            this.log('Inicializando VideoCall para sala:', this.roomId);
+            this.log('Inicializando VideoCall para sala:', this.roomId, 'Usuario:', this.userName);
 
             await this.loadConfig();
 
@@ -71,7 +95,7 @@ class VideoCall {
             this.updateStatus('Esperando a otros participantes...', 'connecting');
             this.log('Inicialización completa');
 
-            // === CONFIGURAR CONTROLES SIN INTERFERIR CON LA LÓGICA ORIGINAL ===
+            // Configurar controles sin interferir con la lógica original
             this.setupKeyboardShortcuts();
 
         } catch (error) {
@@ -80,7 +104,7 @@ class VideoCall {
         }
     }
 
-    // === CONFIGURAR TECLAS DE ACCESO RÁPIDO SIN INTERFERIR ===
+    // Configurar teclas de acceso rápido sin interferir
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -154,8 +178,8 @@ class VideoCall {
                 audioTracks: this.localStream.getAudioTracks().length
             });
 
-            // Agregar nuestro video local al UI
-            this.addVideoToUI('local', this.localStream, 'Tú (Local)', true);
+            // Agregar nuestro video local al UI con nuestro nombre
+            this.addVideoToUI('local', this.localStream, this.getDisplayName('local', true), true);
 
         } catch (error) {
             throw new Error('No se pudo acceder a cámara/micrófono: ' + error.message);
@@ -164,8 +188,9 @@ class VideoCall {
 
     connectSignaling() {
         return new Promise((resolve, reject) => {
+            // ← SOLUCIONADO: NO incluir nombre en URL, enviarlo después
             const wsUrl = `${this.signalingUrl}/${this.roomId}`;
-            this.log('Conectando a WebSocket:', wsUrl);
+            this.log('Conectando a WebSocket:', wsUrl, 'con nombre:', this.userName);
 
             try {
                 this.ws = new WebSocket(wsUrl);
@@ -186,6 +211,15 @@ class VideoCall {
             this.ws.onopen = () => {
                 this.log('WebSocket conectado exitosamente');
                 clearTimeout(timeout);
+
+                // ← NUEVO: Enviar nombre después de conectar
+                this.sendSignalingMessage({
+                    type: 'set_user_name',
+                    data: {
+                        name: this.userName
+                    }
+                });
+
                 resolve();
             };
 
@@ -240,6 +274,11 @@ class VideoCall {
                     await this.handlePeerJoined(message.peer_id);
                     break;
 
+                case 'user_name_set':
+                    // ← NUEVO: Manejar cuando un usuario establece su nombre
+                    this.handleUserNameSet(message);
+                    break;
+
                 case 'peer_left':
                     // Actualizar conteo del servidor si viene en el mensaje
                     if (message.data && message.data.participant_count) {
@@ -276,6 +315,32 @@ class VideoCall {
             }
         } catch (error) {
             console.error('Error manejando mensaje de signaling:', error);
+        }
+    }
+
+    handleUserNameSet(message) {
+        const { peerId, name } = message.data;
+
+        // No procesar nuestro propio nombre
+        if (peerId === this.myPeerId) {
+            return;
+        }
+
+        this.log(`📛 Usuario ${peerId} estableció nombre: ${name}`);
+        this.setPeerName(peerId, name);
+
+        // Actualizar label si ya existe el video
+        this.updateVideoLabel(peerId, name);
+    }
+
+    updateVideoLabel(peerId, name) {
+        const videoWrapper = document.getElementById(`video-${peerId}`);
+        if (videoWrapper) {
+            const label = videoWrapper.querySelector('.video-label');
+            if (label) {
+                label.textContent = name;
+                this.log(`🏷️ Label actualizado para ${peerId}: ${name}`);
+            }
         }
     }
 
@@ -320,8 +385,9 @@ class VideoCall {
             return;
         }
 
-        // Agregar spinner inmediatamente para mostrar que el peer está conectándose
-        this.addSpinnerForPeer(peerId, `Participante ${peerId.slice(-4)}`);
+        // Usar nombre si lo tenemos, sino placeholder
+        const displayName = this.getDisplayName(peerId);
+        this.addSpinnerForPeer(peerId, displayName);
 
         // Crear conexión peer para el nuevo participante (con retry automático)
         const pc = await this.createPeerConnection(peerId, 0);
@@ -362,6 +428,9 @@ class VideoCall {
             this.log('Peer removido del Map. Total peers:', this.peers.size);
         }
 
+        // Remover nombre del mapa
+        this.peerNames.delete(peerId);
+
         // Remover video del UI
         this.removeVideoFromUI(peerId);
 
@@ -372,19 +441,22 @@ class VideoCall {
     async handleOffer(message) {
         this.log('Manejando offer recibido de:', message.peer_id);
 
+        const peerId = message.peer_id;
+        const displayName = this.getDisplayName(peerId);
+
         // Agregar spinner si no existe el elemento
-        if (!document.getElementById(`video-${message.peer_id}`)) {
-            this.addSpinnerForPeer(message.peer_id, `Participante ${message.peer_id.slice(-4)}`);
+        if (!document.getElementById(`video-${peerId}`)) {
+            this.addSpinnerForPeer(peerId, displayName);
         }
 
         // Crear nueva conexión si no existe
         let pc;
-        if (this.peers.has(message.peer_id)) {
-            const peer = this.peers.get(message.peer_id);
+        if (this.peers.has(peerId)) {
+            const peer = this.peers.get(peerId);
             pc = peer.pc;
-            this.log('Usando conexión existente para:', message.peer_id);
+            this.log('Usando conexión existente para:', peerId);
         } else {
-            pc = await this.createPeerConnection(message.peer_id, 0);
+            pc = await this.createPeerConnection(peerId, 0);
 
             // Agregar nuestro stream local
             this.localStream.getTracks().forEach(track => {
@@ -401,21 +473,21 @@ class VideoCall {
             this.sendSignalingMessage({
                 type: 'answer',
                 data: answer,
-                target: message.peer_id
+                target: peerId
             });
 
             this.updateParticipantCount();
 
         } catch (error) {
-            this.log(`❌ Error procesando offer de ${message.peer_id}:`, error);
+            this.log(`❌ Error procesando offer de ${peerId}:`, error);
 
             // Si falla el offer, intentar recrear la conexión
-            if (this.peers.has(message.peer_id)) {
-                const peer = this.peers.get(message.peer_id);
+            if (this.peers.has(peerId)) {
+                const peer = this.peers.get(peerId);
                 if (peer.retryCount < this.maxRetries) {
-                    this.log(`🔄 Reintentando conexión con ${message.peer_id} después de error en offer`);
+                    this.log(`🔄 Reintentando conexión con ${peerId} después de error en offer`);
                     setTimeout(() => {
-                        this.retryPeerConnection(message.peer_id, peer.retryCount + 1);
+                        this.retryPeerConnection(peerId, peer.retryCount + 1);
                     }, this.retryDelay);
                 }
             }
@@ -425,7 +497,8 @@ class VideoCall {
     async handleAnswer(message) {
         this.log('Manejando answer recibido de:', message.peer_id);
 
-        const peer = this.peers.get(message.peer_id);
+        const peerId = message.peer_id;
+        const peer = this.peers.get(peerId);
         if (peer && peer.pc) {
             await peer.pc.setRemoteDescription(message.data);
         }
@@ -434,7 +507,8 @@ class VideoCall {
     async handleIceCandidate(message) {
         this.log('Agregando ICE candidate de:', message.peer_id);
 
-        const peer = this.peers.get(message.peer_id);
+        const peerId = message.peer_id;
+        const peer = this.peers.get(peerId);
         if (peer && peer.pc) {
             await peer.pc.addIceCandidate(message.data);
         }
@@ -471,8 +545,9 @@ class VideoCall {
                 connectionTimer = null;
             }
 
-            // Reemplazar spinner con video real
-            this.replaceSpinnerWithVideo(peerId, remoteStream, `Participante ${peerId.slice(-4)}`);
+            // Usar nombre real
+            const displayName = this.getDisplayName(peerId);
+            this.replaceSpinnerWithVideo(peerId, remoteStream, displayName);
             this.log(`✅ Conexión WebRTC exitosa con ${peerId} en intento ${retryCount + 1}`);
         };
 
@@ -542,19 +617,21 @@ class VideoCall {
             }
         }, this.connectionTimeout);
 
-        // Guardar la conexión con información de retry
+        // Incluir displayName en la info del peer
+        const displayName = this.getDisplayName(peerId);
         this.peers.set(peerId, {
             pc,
             stream: null,
             isLocal: false,
             retryCount: retryCount,
-            connectionTimer: connectionTimer
+            connectionTimer: connectionTimer,
+            displayName: displayName
         });
 
         return pc;
     }
 
-    addSpinnerForPeer(peerId, label) {
+    addSpinnerForPeer(peerId, displayName) {
         // No agregar spinner si ya existe el video
         if (document.getElementById(`video-${peerId}`)) {
             return;
@@ -571,14 +648,14 @@ class VideoCall {
         const spinner = document.createElement('div');
         spinner.className = 'connection-spinner';
         spinner.innerHTML = `
-            <div class="spinner-circle"></div>
-            <div class="spinner-text">Conectando...</div>
-        `;
+                <div class="spinner-circle"></div>
+                <div class="spinner-text">Conectando...</div>
+            `;
 
-        // Crear label
+        // Usar nombre real
         const labelEl = document.createElement('div');
         labelEl.className = 'video-label';
-        labelEl.textContent = label;
+        labelEl.textContent = displayName;
 
         wrapper.appendChild(spinner);
         wrapper.appendChild(labelEl);
@@ -586,14 +663,14 @@ class VideoCall {
         container.appendChild(wrapper);
         this.updateLayout();
 
-        this.log(`Spinner agregado para ${peerId} (${label})`);
+        this.log(`Spinner agregado para ${peerId} (${displayName})`);
     }
 
-    replaceSpinnerWithVideo(peerId, stream, label) {
+    replaceSpinnerWithVideo(peerId, stream, displayName) {
         const wrapper = document.getElementById(`video-${peerId}`);
         if (!wrapper) {
             // Si no hay wrapper, crear video normalmente
-            this.addVideoToUI(peerId, stream, label);
+            this.addVideoToUI(peerId, stream, displayName);
             return;
         }
 
@@ -700,8 +777,9 @@ class VideoCall {
         // Remover video anterior si existe
         this.removeVideoFromUI(peerId);
 
-        // Agregar nuevo spinner para el reintento
-        this.addSpinnerForPeer(peerId, `Participante ${peerId.slice(-4)}`);
+        // Usar nombre real
+        const displayName = this.getDisplayName(peerId);
+        this.addSpinnerForPeer(peerId, displayName);
 
         // Crear nueva conexión con retry count
         const pc = await this.createPeerConnection(peerId, retryCount);
@@ -964,6 +1042,17 @@ class VideoCall {
 
         // Redirigir inmediatamente
         window.location.href = '/';
+    }
+
+    // === FUNCIÓN AUXILIAR PARA REMOVER SPINNERS ===
+    removeSpinner(peerId) {
+        const wrapper = document.getElementById(`video-${peerId}`);
+        if (wrapper) {
+            const spinner = wrapper.querySelector('.connection-spinner');
+            if (spinner) {
+                spinner.remove();
+            }
+        }
     }
 }
 
