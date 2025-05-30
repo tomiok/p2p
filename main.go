@@ -254,75 +254,6 @@ func getIndexHTML() string {
             font-size: 14px;
         }
         .copy-btn:hover { background: #218838; }
-        
-        /* === ESTILOS PARA FORMULARIO DE NOMBRE === */
-        .name-form {
-            margin-bottom: 1rem;
-        }
-        
-        .input-group {
-            margin-bottom: 1rem;
-        }
-        
-        .input-group label {
-            display: block;
-            text-align: left;
-            margin-bottom: 0.5rem;
-            color: #555;
-            font-weight: 500;
-        }
-        
-        .input-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e1e5e9;
-            border-radius: 6px;
-            font-size: 16px;
-            transition: border-color 0.2s ease;
-        }
-        
-        .input-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .input-group input:invalid {
-            border-color: #dc3545;
-        }
-        
-        .input-hint {
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 0.25rem;
-            text-align: left;
-        }
-        
-        .name-display {
-            background: #f8f9fa;
-            padding: 0.75rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            border: 1px solid #e1e5e9;
-        }
-        
-        .name-display strong {
-            color: #667eea;
-        }
-        
-        .change-name-btn {
-            background: transparent;
-            color: #667eea;
-            border: 1px solid #667eea;
-            padding: 6px 12px;
-            font-size: 14px;
-            margin-top: 0.5rem;
-        }
-        
-        .change-name-btn:hover {
-            background: #667eea;
-            color: white;
-        }
     </style>
 </head>
 <body>
@@ -330,30 +261,7 @@ func getIndexHTML() string {
         <h1>🎥 VideoP2P</h1>
         <p>Videollamadas directas sin apps ni registros</p>
         
-        <!-- Formulario para ingresar nombre -->
-        <div id="nameForm" class="name-form">
-            <div class="input-group">
-                <label for="userName">Tu nombre:</label>
-                <input 
-                    type="text" 
-                    id="userName" 
-                    placeholder="Ej: Juan, María, Alex..."
-                    maxlength="20"
-                    pattern="[a-zA-Z0-9\s]{1,20}"
-                    title="Solo letras, números y espacios (máximo 20 caracteres)"
-                >
-                <div class="input-hint">Solo letras, números y espacios (máximo 20 caracteres)</div>
-            </div>
-            <button id="setNameBtn" onclick="setUserName()" disabled>Confirmar Nombre</button>
-        </div>
-        
-        <!-- Display del nombre confirmado -->
-        <div id="nameDisplay" class="name-display" style="display: none;">
-            <div>Te unirás como: <strong id="displayName"></strong></div>
-            <button class="change-name-btn" onclick="changeName()">Cambiar nombre</button>
-        </div>
-        
-        <button id="createRoomBtn" onclick="createRoom()" style="display: none;">
+        <button id="createRoomBtn" onclick="createRoom()">
             Crear Nueva Videollamada
         </button>
         
@@ -367,85 +275,14 @@ func getIndexHTML() string {
 
     <script>
         let currentRoomUrl = '';
-        let currentUserName = '';
-
-        // === MANEJO DEL NOMBRE DE USUARIO ===
-        
-        // Validación en tiempo real del input
-        document.getElementById('userName').addEventListener('input', function(e) {
-            const input = e.target;
-            const setNameBtn = document.getElementById('setNameBtn');
-            
-            // Filtrar caracteres no permitidos en tiempo real
-            const filtered = input.value.replace(/[^a-zA-Z0-9\s]/g, '');
-            if (input.value !== filtered) {
-                input.value = filtered;
-            }
-            
-            // Verificar si es válido para habilitar botón
-            const isValid = filtered.trim().length >= 1 && filtered.trim().length <= 20;
-            setNameBtn.disabled = !isValid;
-            
-            // Visual feedback
-            if (filtered.trim().length > 0) {
-                input.style.borderColor = isValid ? '#28a745' : '#dc3545';
-            } else {
-                input.style.borderColor = '#e1e5e9';
-            }
-        });
-        
-        // Confirmar nombre al presionar Enter
-        document.getElementById('userName').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !document.getElementById('setNameBtn').disabled) {
-                setUserName();
-            }
-        });
-        
-        function setUserName() {
-            const input = document.getElementById('userName');
-            const name = input.value.trim();
-            
-            if (name.length < 1 || name.length > 20) {
-                alert('El nombre debe tener entre 1 y 20 caracteres');
-                return;
-            }
-            
-            currentUserName = name;
-            
-            // Ocultar formulario y mostrar display + botón de crear sala
-            document.getElementById('nameForm').style.display = 'none';
-            document.getElementById('nameDisplay').style.display = 'block';
-            document.getElementById('displayName').textContent = currentUserName;
-            document.getElementById('createRoomBtn').style.display = 'block';
-            
-            // Focus automático en el botón de crear sala
-            document.getElementById('createRoomBtn').focus();
-        }
-        
-        function changeName() {
-            // Volver al formulario de nombre
-            document.getElementById('nameForm').style.display = 'block';
-            document.getElementById('nameDisplay').style.display = 'none';
-            document.getElementById('createRoomBtn').style.display = 'none';
-            document.getElementById('linkContainer').style.display = 'none';
-            
-            // Focus en el input
-            document.getElementById('userName').focus();
-            document.getElementById('userName').select();
-        }
 
         async function createRoom() {
-            if (!currentUserName) {
-                alert('Primero debes confirmar tu nombre');
-                return;
-            }
-            
             try {
                 const response = await fetch('/api/room', { method: 'POST' });
                 const room = await response.json();
                 
-                // Agregar el nombre como parámetro en la URL
-                currentRoomUrl = window.location.origin + room.url + '?name=' + encodeURIComponent(currentUserName);
+                // URL limpia sin parámetros
+                currentRoomUrl = window.location.origin + room.url;
                 document.getElementById('roomLink').textContent = currentRoomUrl;
                 document.getElementById('linkContainer').style.display = 'block';
             } catch (error) {
@@ -850,47 +687,36 @@ func getRoomHTML(roomId string) string {
         }
         
         function setupNameModal() {
-            const nameFromUrl = getUserNameFromURL();
-            const input = document.getElementById('modalUserName');
-            const joinBtn = document.getElementById('joinRoomBtn');
-            
-            // Si viene nombre en URL, pre-llenarlo
-            if (nameFromUrl) {
-                input.value = nameFromUrl;
-                // Trigger validation
-                input.dispatchEvent(new Event('input'));
-            }
-            
-            // Validación en tiempo real
-            input.addEventListener('input', function(e) {
-                const filtered = e.target.value.replace(/[^a-zA-Z0-9\s]/g, '');
-                if (e.target.value !== filtered) {
-                    e.target.value = filtered;
-                }
-                
-                const isValid = filtered.trim().length >= 1 && filtered.trim().length <= 20;
-                joinBtn.disabled = !isValid;
-                
-                if (filtered.trim().length > 0) {
-                    e.target.style.borderColor = isValid ? '#28a745' : '#dc3545';
-                } else {
-                    e.target.style.borderColor = '#e1e5e9';
-                }
-            });
-            
-            // Enter para unirse
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && !joinBtn.disabled) {
-                    joinWithName();
-                }
-            });
-            
-            // Focus automático
-            input.focus();
-            if (nameFromUrl) {
-                input.select();
-            }
-        }
+			const input = document.getElementById('modalUserName');
+			const joinBtn = document.getElementById('joinRoomBtn');
+			
+			// Validación en tiempo real
+			input.addEventListener('input', function(e) {
+				const filtered = e.target.value.replace(/[^a-zA-Z0-9\s]/g, '');
+				if (e.target.value !== filtered) {
+					e.target.value = filtered;
+				}
+				
+				const isValid = filtered.trim().length >= 1 && filtered.trim().length <= 20;
+				joinBtn.disabled = !isValid;
+				
+				if (filtered.trim().length > 0) {
+					e.target.style.borderColor = isValid ? '#28a745' : '#dc3545';
+				} else {
+					e.target.style.borderColor = '#e1e5e9';
+				}
+			});
+			
+			// Enter para unirse
+			input.addEventListener('keypress', function(e) {
+				if (e.key === 'Enter' && !joinBtn.disabled) {
+					joinWithName();
+				}
+			});
+			
+			// Focus automático (sin pre-llenar desde URL)
+			input.focus();
+		}
         
         function joinWithName() {
             const input = document.getElementById('modalUserName');
