@@ -1,0 +1,61 @@
+{{ define "base"}}
+    <!doctype html>
+    <html lang="es">
+    <head>
+        {{block "head" .}}
+
+        {{end}}
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noticia+Text&display=swap" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+        <title>CACTUS - Download software</title>
+
+        <meta name="title" content="cactus TDB">
+        <meta name="description" content="cactus TDB">
+
+        <meta charset="UTF-8">
+        <meta name="viewport"
+              content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, shrink-to-fit=no">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+        <meta property="og:title" content="cactus TDB"/>
+        <meta property="og:description" content="cactus TDB"/>
+        <meta property="og:url" content="https://cactus.io"/>
+        <meta property="og:type" content="website">
+        <meta property="og:image" itemprop="image" content="/static/android-chrome-512x512.png"/>
+
+        <meta property="twitter:card" content="cactus TDB">
+        <meta property="twitter:url" content="https://cactus.io/">
+        <meta property="twitter:title" content="cactus TDB">
+        <meta property="twitter:description" content="cactus TDB">
+        <meta property="twitter:image" content="/static/android-chrome-512x512.png">
+
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="black">
+
+        {{/*        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">*/}}
+        {{/*        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">*/}}
+        {{/*        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">*/}}
+        {{/*        <link rel="manifest" href="/static/manifest.json">*/}}
+
+        {{/*        <script src="/static/js/load.js"></script>*/}}
+        <title>cactus TDB</title>
+        {{ block "css" .}}
+
+        {{ end }}
+    </head>
+    <body>
+    {{ block "content" . }}
+
+    {{ end }}
+
+    <script src="https://unpkg.com/htmx.org@1.9.2"
+            integrity="sha384-L6OqL9pRWyyFU3+/bjdSri+iIphTN/bvYyM37tICVyOJkWZLpP2vGn6VUEXgzg6h" crossorigin="anonymous">
+    </script>
+    {{ block "js" .}}
+    {{ end }}
+    </body>
+    </html>
+{{ end }}

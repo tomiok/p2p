@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoCall - Simple Video Meetings</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 500px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+
+        .action-section {
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 16px 32px;
+            margin: 10px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            min-width: 200px;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .divider {
+            margin: 30px 0;
+            position: relative;
+        }
+
+        .divider::before {
+            content: 'OR';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.3);
+            z-index: -1;
+        }
+
+        .join-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        input {
+            flex: 1;
+            padding: 16px 20px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        input::placeholder {
+            color: #999;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: normal;
+        }
+
+        input:focus {
+            outline: none;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-left: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 10000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 20px;
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            .btn {
+                min-width: auto;
+                width: 100%;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📹 VideoCall</h1>
+    <p class="subtitle">Simple video meetings for teams</p>
+
+    <div class="action-section">
+        <button id="createRoomBtn" class="btn btn-primary">
+            Start New Meeting
+        </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="join-form">
+        <div class="input-group">
+            <input
+                    type="text"
+                    id="roomInput"
+                    placeholder="Enter room code"
+                    maxlength="10"
+            >
+            <button id="joinRoomBtn" class="btn btn-secondary">
+                Join
+            </button>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p id="loadingText">Creating room...</p>
+    </div>
+
+    <div class="error" id="error"></div>
+</div>
+
+<script src="/static/js/livekit.js"></script>
+<script>
+    class LandingPage {
+        constructor() {
+            this.init();
+        }
+
+        init() {
+            this.setupEventListeners();
+            this.handleURLParams();
+        }
+
+        setupEventListeners() {
+            // Create room button
+            document.getElementById('createRoomBtn').addEventListener('click', () => {
+                this.createRoom();
+            });
+
+            // Join room button
+            document.getElementById('joinRoomBtn').addEventListener('click', () => {
+                this.joinRoom();
+            });
+
+            // Enter key on room input
+            document.getElementById('roomInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.joinRoom();
+                }
+            });
+
+            // Format room input
+            document.getElementById('roomInput').addEventListener('input', (e) => {
+                let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                e.target.value = value;
+            });
+        }
+
+        handleURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            const roomId = params.get('room');
+            const error = params.get('error');
+
+            if (roomId) {
+                document.getElementById('roomInput').value = roomId;
+                // Auto-focus on join button
+                document.getElementById('joinRoomBtn').focus();
+            }
+
+            if (error === 'room_not_found') {
+                this.showError('Room not found. Please check the room code.');
+            }
+        }
+
+        async createRoom() {
+            this.showLoading('Creating room...');
+            this.hideError();
+
+            try {
+                const response = await fetch('/api/rooms', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(errorData || 'Failed to create room');
+                }
+
+                const data = await response.json();
+
+                // Copy link to clipboard
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(data.join_url);
+                    this.showNotification('Room link copied to clipboard!');
+                }
+
+                // Redirect to room
+                window.location.href = `/room?room=${data.room.id}`;
+
+            } catch (error) {
+                console.error('Failed to create room:', error);
+                this.hideLoading();
+                this.showError('Failed to create room. Please try again.');
+            }
+        }
+
+        joinRoom() {
+            const roomId = document.getElementById('roomInput').value.trim();
+
+            if (!roomId) {
+                this.showError('Please enter a room code');
+                document.getElementById('roomInput').focus();
+                return;
+            }
+
+            // Validate room code format (basic validation)
+            if (roomId.length < 3) {
+                this.showError('Room code must be at least 3 characters');
+                return;
+            }
+
+            this.hideError();
+
+            // Redirect to room
+            window.location.href = `/room?room=${roomId}`;
+        }
+
+        showLoading(message = 'Loading...') {
+            document.getElementById('loadingText').textContent = message;
+            document.getElementById('loading').style.display = 'block';
+
+            // Disable buttons
+            document.getElementById('createRoomBtn').disabled = true;
+            document.getElementById('joinRoomBtn').disabled = true;
+        }
+
+        hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+
+            // Enable buttons
+            document.getElementById('createRoomBtn').disabled = false;
+            document.getElementById('joinRoomBtn').disabled = false;
+        }
+
+        showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            // Show notification
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            // Hide notification after 3 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+        new LandingPage();
+    });
+</script>
+</body>
+</html>

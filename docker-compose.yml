@@ -1,0 +1,30 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  # Go Backend
+#  api:
+#    build: .
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - LIVEKIT_URL=http://livekit:7880
+#      - LIVEKIT_API_KEY=devkey
+#      - LIVEKIT_API_SECRET=secret
+#    depends_on:
+#      - livekit
+
+  # LiveKit SFU
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881/udp"
+    volumes:
+      - ./config/livekit.yaml:/livekit.yaml
+    command: --config /livekit.yaml
+
+  # Redis (opcional, para persistencia)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

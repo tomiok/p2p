@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call - VideoCall</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Join Screen */
+        .join-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .join-form {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 16px;
+            backdrop-filter: blur(20px);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .join-form h1 {
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .room-code {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            letter-spacing: 2px;
+        }
+
+        .preview-video {
+            width: 200px;
+            height: 150px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            object-fit: cover;
+            background: #333;
+        }
+
+        .join-form input {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 16px;
+        }
+
+        .join-form button {
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 8px;
+            background: #4CAF50;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .join-form button:hover {
+            background: #45a049;
+        }
+
+        .join-form button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Video Container */
+        .video-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            display: none;
+        }
+
+        /* Video Grid */
+        .video-grid {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            gap: 4px;
+            padding: 4px;
+            transition: all 0.3s ease;
+        }
+
+        /* Dynamic layouts based on participant count */
+        .video-grid.participants-1 { grid-template-columns: 1fr; }
+        .video-grid.participants-2 { grid-template-columns: 1fr 1fr; }
+        .video-grid.participants-3 {
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        .video-grid.participants-3 .video-wrapper:first-child {
+            grid-row: 1 / 3;
+        }
+        .video-grid.participants-4 {
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        .video-grid.participants-5,
+        .video-grid.participants-6 {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: 1fr 1fr;
+        }
+        .video-grid.participants-7,
+        .video-grid.participants-8,
+        .video-grid.participants-9 {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+        .video-grid.participants-10,
+        .video-grid.participants-11,
+        .video-grid.participants-12 {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+
+        /* Video Wrapper */
+        .video-wrapper {
+            position: relative;
+            background: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-wrapper.speaking {
+            border: 3px solid #4CAF50;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .video-wrapper.local {
+            border: 2px solid #2196F3;
+        }
+
+        .video-wrapper video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        /* Video Placeholder */
+        .video-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* Video Label */
+        .video-label {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Audio Indicator */
+        .audio-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .audio-indicator.muted {
+            background: rgba(244, 67, 54, 0.8);
+        }
+
+        .audio-indicator.speaking {
+            background: rgba(76, 175, 80, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Controls */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 20px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 20px;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .control-btn.active {
+            background: #4CAF50;
+        }
+
+        .control-btn.muted {
+            background: #f44336;
+        }
+
+        .control-btn.hangup {
+            background: #f44336;
+        }
+
+        .control-btn.hangup:hover {
+            background: #d32f2f;
+        }
+
+        /* Room Info */
+        .room-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+        }
+
+        .participant-count {
+            color: #4CAF50;
+            font-weight: 600;
+        }
+
+        /* Error Message */
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .video-grid.participants-3,
+            .video-grid.participants-4,
+            .video-grid.participants-5,
+            .video-grid.participants-6 {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: repeat(3, 1fr);
+            }
+
+            .video-grid.participants-3 .video-wrapper:first-child {
+                grid-row: auto;
+            }
+
+            .controls {
+                bottom: 10px;
+                padding: 8px 16px;
+            }
+
+            .control-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+
+            .room-info {
+                top: 10px;
+                left: 10px;
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+
+            .avatar {
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+        }
+
+        /* SDK Loading Status */
+        .sdk-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 10000;
+        }
+
+        .sdk-status.loading {
+            background: orange;
+            color: white;
+        }
+
+        .sdk-status.loaded {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .sdk-status.error {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+<!-- SDK Loading Status -->
+<div id="sdkStatus" class="sdk-status loading">Loading LiveKit...</div>
+
+<!-- Join Screen -->
+<div id="joinScreen" class="join-screen">
+    <div class="join-form">
+        <h1>Join Video Call</h1>
+        <div class="room-code" id="roomCodeDisplay">Room: ...</div>
+        <video id="previewVideo" class="preview-video" autoplay muted playsinline></video>
+        <input type="text" id="nameInput" placeholder="Enter your name" maxlength="50" required>
+        <button id="joinBtn" disabled>Loading SDK...</button>
+    </div>
+</div>
+
+<!-- Loading Screen -->
+<div id="loadingScreen" class="loading-screen">
+    <div class="spinner"></div>
+    <p id="loadingText">Connecting to room...</p>
+</div>
+
+<!-- Error Message -->
+<div id="errorMessage" class="error-message">
+    <h3>Connection Failed</h3>
+    <p id="errorText"></p>
+    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: white; color: #333; border: none; border-radius: 4px; cursor: pointer;">Try Again</button>
+</div>
+
+<!-- Main Video Container -->
+<div class="video-container" id="videoContainer">
+    <!-- Room Info -->
+    <div class="room-info">
+        <span id="roomId">Room: ...</span>
+        <span class="participant-count" id="participantCount">1 participant</span>
+    </div>
+
+    <!-- Video Grid -->
+    <div class="video-grid participants-1" id="videoGrid">
+        <!-- Videos will be added dynamically -->
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button id="muteBtn" class="control-btn" title="Mute/Unmute">
+            🎤
+        </button>
+
+        <button id="videoBtn" class="control-btn" title="Camera On/Off">
+            📹
+        </button>
+
+        <button id="screenBtn" class="control-btn" title="Share Screen">
+            🖥️
+        </button>
+
+        <button id="copyBtn" class="control-btn" title="Copy Room Link">
+            🔗
+        </button>
+
+        <button id="hangupBtn" class="control-btn hangup" title="Leave Call">
+            📞
+        </button>
+    </div>
+</div>
+
+<!-- LiveKit SDK - FIXED: Use CDN instead of local file -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+
+<script>
+    // SDK Loading Management
+    let sdkLoadAttempts = 0;
+    const maxAttempts = 50; // 10 seconds max
+
+    function updateSDKStatus(status, message) {
+        const statusEl = document.getElementById('sdkStatus');
+        const joinBtn = document.getElementById('joinBtn');
+
+        statusEl.className = `sdk-status ${status}`;
+        statusEl.textContent = message;
+
+        if (status === 'loaded') {
+            joinBtn.disabled = false;
+            joinBtn.textContent = 'Join Call';
+            setTimeout(() => statusEl.style.display = 'none', 2000);
+        } else if (status === 'error') {
+            joinBtn.disabled = true;
+            joinBtn.textContent = 'SDK Failed to Load';
+        }
+    }
+
+    function checkLiveKitSDK() {
+        // Check multiple possible global names
+        const sdk = window.LiveKit || window.LivekitClient || window.livekit;
+
+        if (sdk) {
+            console.log('✅ LiveKit SDK loaded successfully!', sdk);
+            updateSDKStatus('loaded', 'LiveKit Ready');
+
+            // Make sure it's available globally as LiveKit
+            if (!window.LiveKit) {
+                window.LiveKit = sdk;
+            }
+
+            // Initialize the app
+            initializeApp();
+            return true;
+        }
+
+        sdkLoadAttempts++;
+
+        if (sdkLoadAttempts < maxAttempts) {
+            console.log(`⏳ Waiting for LiveKit SDK... (${sdkLoadAttempts}/${maxAttempts})`);
+            updateSDKStatus('loading', `Loading SDK... (${sdkLoadAttempts}/${maxAttempts})`);
+            setTimeout(checkLiveKitSDK, 200);
+        } else {
+            console.error('❌ LiveKit SDK failed to load after maximum attempts');
+            updateSDKStatus('error', 'Failed to load SDK');
+
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorText').textContent = 'Video call library failed to load. Please check your internet connection and try again.';
+        }
+
+        return false;
+    }
+
+    function initializeApp() {
+        try {
+            console.log('🚀 Initializing VideoCall App...');
+            new VideoCallApp();
+        } catch (error) {
+            console.error('Failed to initialize app:', error);
+            updateSDKStatus('error', 'App initialization failed');
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorText').textContent = `Failed to initialize video call: ${error.message}`;
+        }
+    }
+
+    // Start checking for SDK immediately
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('🔄 Starting LiveKit SDK detection...');
+        checkLiveKitSDK();
+    });
+
+    // Also check on window load as backup
+    window.addEventListener('load', () => {
+        if (!window.LiveKit) {
+            console.log('🔄 Backup check for LiveKit SDK...');
+            setTimeout(checkLiveKitSDK, 500);
+        }
+    });
+</script>
+
+<script>
+    class VideoCallApp {
+        constructor() {
+            // Verify LiveKit is available
+            if (!window.LiveKit) {
+                throw new Error('LiveKit SDK is not available');
+            }
+
+            console.log('🎥 VideoCallApp starting with LiveKit:', window.LiveKit);
+
+            this.room = null;
+            this.localTracks = [];
+            this.participants = new Map();
+            this.isAudioEnabled = true;
+            this.isVideoEnabled = true;
+            this.isScreenSharing = false;
+            this.roomId = null;
+
+            this.init();
+        }
+
+        init() {
+            this.setupJoinScreen();
+            this.setupControls();
+            this.handleURLParams();
+        }
+
+        handleURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            this.roomId = params.get('room');
+
+            if (!this.roomId) {
+                this.showError('No room ID provided', 'Please check your link and try again.');
+                return;
+            }
+
+            // Update UI with room ID
+            document.getElementById('roomCodeDisplay').textContent = `Room: ${this.roomId}`;
+            document.getElementById('roomId').textContent = `Room: ${this.roomId}`;
+        }
+
+        setupJoinScreen() {
+            const joinBtn = document.getElementById('joinBtn');
+            const nameInput = document.getElementById('nameInput');
+
+            // Setup camera preview
+            this.setupPreview();
+
+            joinBtn.addEventListener('click', () => {
+                const name = nameInput.value.trim();
+                if (!name) {
+                    alert('Please enter your name');
+                    nameInput.focus();
+                    return;
+                }
+                if (name.length < 2) {
+                    alert('Name must be at least 2 characters');
+                    nameInput.focus();
+                    return;
+                }
+                this.joinRoom(name);
+            });
+
+            nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !joinBtn.disabled) {
+                    joinBtn.click();
+                }
+            });
+
+            // Auto-focus on name input
+            setTimeout(() => {
+                nameInput.focus();
+            }, 500);
+        }
+
+        async setupPreview() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
+
+                const previewVideo = document.getElementById('previewVideo');
+                previewVideo.srcObject = stream;
+
+                // Store stream to stop later
+                this.previewStream = stream;
+                console.log('📹 Camera preview setup successfully');
+            } catch (error) {
+                console.error('Failed to get camera preview:', error);
+                // Show placeholder in preview
+                const previewVideo = document.getElementById('previewVideo');
+                previewVideo.style.display = 'none';
+            }
+        }
+
+        async joinRoom(name) {
+            if (!this.roomId) {
+                this.showError('Invalid room', 'No room ID found.');
+                return;
+            }
+
+            this.showLoading('Connecting to room...');
+
+            try {
+                // Stop preview stream
+                if (this.previewStream) {
+                    this.previewStream.getTracks().forEach(track => track.stop());
+                }
+
+                // Get token from backend
+                const response = await fetch(`/api/rooms/${this.roomId}/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Failed to join room');
+                }
+
+                const data = await response.json();
+                console.log('🎫 Received token from backend:', {
+                    url: data.livekit_url,
+                    hasToken: !!data.token
+                });
+
+                // Connect to LiveKit
+                await this.connectToLiveKit(data.livekit_url, data.token);
+
+            } catch (error) {
+                console.error('Failed to join room:', error);
+                this.showError('Failed to join room', error.message);
+            }
+        }
+
+        async connectToLiveKit(wsUrl, token) {
+            try {
+                console.log('🔌 Connecting to LiveKit...', { url: wsUrl });
+
+                // Create room with better configuration
+                this.room = new LiveKit.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                    videoCaptureDefaults: {
+                        resolution: LiveKit.VideoPresets.h720.resolution,
+                    },
+                    publishDefaults: {
+                        videoSimulcastLayers: [
+                            LiveKit.VideoPresets.h90,
+                            LiveKit.VideoPresets.h216,
+                            LiveKit.VideoPresets.h360,
+                        ],
+                    },
+                });
+
+                // Setup room events
+                this.setupRoomEvents();
+
+                // Connect
+                await this.room.connect(wsUrl, token);
+                console.log('✅ Connected to LiveKit room!');
+
+                // Publish local tracks
+                await this.publishLocalTracks();
+
+                // Show video UI
+                this.showVideoCall();
+
+            } catch (error) {
+                console.error('❌ Failed to connect to LiveKit:', error);
+                throw error;
+            }
+        }
+
+        setupRoomEvents() {
+            console.log('🎧 Setting up room events...');
+
+            // Participant joined
+            this.room.on(LiveKit.RoomEvent.ParticipantConnected, (participant) => {
+                console.log('👤 Participant connected:', participant.identity);
+                this.addParticipant(participant);
+            });
+
+            // Participant left
+            this.room.on(LiveKit.RoomEvent.ParticipantDisconnected, (participant) => {
+                console.log('👤 Participant disconnected:', participant.identity);
+                this.removeParticipant(participant);
+            });
+
+            // Track subscribed
+            this.room.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                console.log('📺 Track subscribed:', {
+                    kind: track.kind,
+                    participant: participant.identity
+                });
+                this.handleTrackSubscribed(track, participant);
+            });
+
+            // Track unsubscribed
+            this.room.on(LiveKit.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+                console.log('📺 Track unsubscribed:', {
+                    kind: track.kind,
+                    participant: participant.identity
+                });
+                this.handleTrackUnsubscribed(track, participant);
+            });
+
+            // Speaking changed
+            this.room.on(LiveKit.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+                this.updateSpeakers(speakers);
+            });
+
+            // Connection quality changed
+            this.room.on(LiveKit.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+                console.log('📶 Connection quality:', {
+                    quality,
+                    participant: participant?.identity
+                });
+            });
+
+            // Room disconnected
+            this.room.on(LiveKit.RoomEvent.Disconnected, (reason) => {
+                console.log('🔌 Room disconnected:', reason);
+                if (reason) {
+                    this.showError('Disconnected', 'You have been disconnected from the room.');
+                }
+            });
+        }
+
+        async publishLocalTracks() {
+            try {
+                console.log('📤 Publishing local tracks...');
+
+                // Create tracks with specific constraints
+                const tracks = await LiveKit.createLocalTracks({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    },
+                    video: {
+                        resolution: LiveKit.VideoPresets.h720.resolution,
+                        facingMode: 'user',
+                    },
+                });
+
+                console.log('📹 Created local tracks:', tracks.map(t => t.kind));
+
+                // Publish each track
+                for (const track of tracks) {
+                    await this.room.localParticipant.publishTrack(track);
+                    this.localTracks.push(track);
+                    console.log(`✅ Published ${track.kind} track`);
+                }
+
+                // Add local participant to UI
+                this.addLocalParticipant();
+
+            } catch (error) {
+                console.error('❌ Failed to publish tracks:', error);
+                // Continue anyway - user can still receive video
+                this.addLocalParticipant();
+            }
+        }
+
+        addLocalParticipant() {
+            console.log('➕ Adding local participant to UI...');
+            const videoGrid = document.getElementById('videoGrid');
+            const wrapper = this.createVideoWrapper(this.room.localParticipant, true);
+            videoGrid.appendChild(wrapper);
+
+            // Attach local video track
+            const videoTrack = this.localTracks.find(track => track.kind === 'video');
+            if (videoTrack) {
+                const videoElement = wrapper.querySelector('video');
+                if (videoElement) {
+                    videoTrack.attach(videoElement);
+                    console.log('📹 Attached local video track to UI');
+                }
+            }
+
+            this.updateLayout();
+            this.updateParticipantCount();
+        }
+
+        addParticipant(participant) {
+            console.log('➕ Adding participant to UI:', participant.identity);
+            const videoGrid = document.getElementById('videoGrid');
+            const wrapper = this.createVideoWrapper(participant, false);
+            videoGrid.appendChild(wrapper);
+
+            this.participants.set(participant.sid, participant);
+            this.updateLayout();
+            this.updateParticipantCount();
+        }
+
+        removeParticipant(participant) {
+            console.log('➖ Removing participant from UI:', participant.identity);
+            const wrapper = document.getElementById(`participant-${participant.sid}`);
+            if (wrapper) {
+                wrapper.remove();
+            }
+
+            this.participants.delete(participant.sid);
+            this.updateLayout();
+            this.updateParticipantCount();
+        }
+
+        createVideoWrapper(participant, isLocal = false) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `video-wrapper ${isLocal ? 'local' : 'remote'}`;
+            wrapper.id = `participant-${participant.sid}`;
+
+            // Create video element
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.playsInline = true;
+            if (isLocal) video.muted = true;
+
+            // Create placeholder
+            const placeholder = document.createElement('div');
+            placeholder.className = 'video-placeholder';
+            placeholder.innerHTML = `
+                <div class="avatar">${this.getInitials(participant.identity || 'Unknown')}</div>
+            `;
+
+            // Create label
+            const label = document.createElement('div');
+            label.className = 'video-label';
+            label.textContent = isLocal ? 'You' : (participant.identity || 'Guest');
+
+            // Create audio indicator
+            const audioIndicator = document.createElement('div');
+            audioIndicator.className = 'audio-indicator muted';
+            audioIndicator.innerHTML = '🎤';
+
+            wrapper.appendChild(placeholder);
+            wrapper.appendChild(video);
+            wrapper.appendChild(label);
+            wrapper.appendChild(audioIndicator);
+
+            return wrapper;
+        }
+
+        handleTrackSubscribed(track, participant) {
+            const wrapper = document.getElementById(`participant-${participant.sid}`);
+            if (!wrapper) {
+                console.warn('No wrapper found for participant:', participant.identity);
+                return;
+            }
+
+            if (track.kind === 'video') {
+                const videoElement = wrapper.querySelector('video');
+                const placeholder = wrapper.querySelector('.video-placeholder');
+
+                if (videoElement && placeholder) {
+                    track.attach(videoElement);
+                    videoElement.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    console.log(`📹 Attached video track for ${participant.identity}`);
+                }
+            } else if (track.kind === 'audio') {
+                // Audio is automatically played
+                const audioElement = track.attach();
+                document.body.appendChild(audioElement);
+                console.log(`🔊 Attached audio track for ${participant.identity}`);
+            }
+        }
+
+        handleTrackUnsubscribed(track, participant) {
+            const wrapper = document.getElementById(`participant-${participant.sid}`);
+            if (!wrapper) return;
+
+            if (track.kind === 'video') {
+                const videoElement = wrapper.querySelector('video');
+                const placeholder = wrapper.querySelector('.video-placeholder');
+
+                if (videoElement && placeholder) {
+                    videoElement.style.display = 'none';
+                    placeholder.style.display = 'flex';
+                    console.log(`📹 Removed video track for ${participant.identity}`);
+                }
+            }
+        }
+
+        updateSpeakers(speakers) {
+            // Remove all speaking indicators
+            document.querySelectorAll('.video-wrapper').forEach(wrapper => {
+                wrapper.classList.remove('speaking');
+                const indicator = wrapper.querySelector('.audio-indicator');
+                indicator.classList.remove('speaking');
+                indicator.classList.add('muted');
+            });
+
+            // Add speaking indicators
+            speakers.forEach(speaker => {
+                const wrapper = document.getElementById(`participant-${speaker.sid}`);
+                if (wrapper) {
+                    wrapper.classList.add('speaking');
+                    const indicator = wrapper.querySelector('.audio-indicator');
+                    indicator.classList.remove('muted');
+                    indicator.classList.add('speaking');
+                }
+            });
+        }
+
+        updateLayout() {
+            const videoGrid = document.getElementById('videoGrid');
+            const participantCount = this.participants.size + 1; // +1 for local participant
+
+            // Remove all participant classes
+            videoGrid.classList.forEach(className => {
+                if (className.startsWith('participants-')) {
+                    videoGrid.classList.remove(className);
+                }
+            });
+
+            // Add current participant count class
+            videoGrid.classList.add(`participants-${Math.min(participantCount, 12)}`);
+        }
+
+        updateParticipantCount() {
+            const count = this.participants.size + 1;
+            const countElement = document.getElementById('participantCount');
+            countElement.textContent = `${count} participant${count !== 1 ? 's' : ''}`;
+        }
+
+        setupControls() {
+            // Mute button
+            document.getElementById('muteBtn').addEventListener('click', () => {
+                this.toggleAudio();
+            });
+
+            // Video button
+            document.getElementById('videoBtn').addEventListener('click', () => {
+                this.toggleVideo();
+            });
+
+            // Screen share button
+            document.getElementById('screenBtn').addEventListener('click', () => {
+                this.toggleScreenShare();
+            });
+
+            // Copy link button
+            document.getElementById('copyBtn').addEventListener('click', () => {
+                this.copyRoomLink();
+            });
+
+            // Hangup button
+            document.getElementById('hangupBtn').addEventListener('click', () => {
+                this.leaveRoom();
+            });
+        }
+
+        async toggleAudio() {
+            const muteBtn = document.getElementById('muteBtn');
+
+            try {
+                if (this.isAudioEnabled) {
+                    await this.room.localParticipant.setMicrophoneEnabled(false);
+                    muteBtn.classList.add('muted');
+                    muteBtn.title = 'Unmute';
+                    console.log('🔇 Microphone muted');
+                } else {
+                    await this.room.localParticipant.setMicrophoneEnabled(true);
+                    muteBtn.classList.remove('muted');
+                    muteBtn.title = 'Mute';
+                    console.log('🎤 Microphone unmuted');
+                }
+
+                this.isAudioEnabled = !this.isAudioEnabled;
+            } catch (error) {
+                console.error('Failed to toggle audio:', error);
+            }
+        }
+
+        async toggleVideo() {
+            const videoBtn = document.getElementById('videoBtn');
+
+            try {
+                if (this.isVideoEnabled) {
+                    await this.room.localParticipant.setCameraEnabled(false);
+                    videoBtn.classList.add('muted');
+                    videoBtn.title = 'Turn Camera On';
+                    this.showLocalPlaceholder();
+                    console.log('📹 Camera disabled');
+                } else {
+                    await this.room.localParticipant.setCameraEnabled(true);
+                    videoBtn.classList.remove('muted');
+                    videoBtn.title = 'Turn Camera Off';
+                    this.hideLocalPlaceholder();
+                    console.log('📹 Camera enabled');
+                }
+
+                this.isVideoEnabled = !this.isVideoEnabled;
+            } catch (error) {
+                console.error('Failed to toggle video:', error);
+            }
+        }
+
+        async toggleScreenShare() {
+            const screenBtn = document.getElementById('screenBtn');
+
+            try {
+                if (!this.isScreenSharing) {
+                    await this.room.localParticipant.setScreenShareEnabled(true);
+                    screenBtn.classList.add('active');
+                    screenBtn.innerHTML = '🛑';
+                    screenBtn.title = 'Stop Sharing';
+                    this.isScreenSharing = true;
+                    console.log('🖥️ Screen sharing started');
+                } else {
+                    await this.room.localParticipant.setScreenShareEnabled(false);
+                    screenBtn.classList.remove('active');
+                    screenBtn.innerHTML = '🖥️';
+                    screenBtn.title = 'Share Screen';
+                    this.isScreenSharing = false;
+                    console.log('🖥️ Screen sharing stopped');
+                }
+            } catch (error) {
+                console.error('Failed to toggle screen share:', error);
+                alert('Screen sharing failed. Please try again.');
+            }
+        }
+
+        copyRoomLink() {
+            const roomLink = window.location.href;
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(roomLink).then(() => {
+                    this.showNotification('Room link copied to clipboard!');
+                }).catch(() => {
+                    this.fallbackCopyToClipboard(roomLink);
+                });
+            } else {
+                this.fallbackCopyToClipboard(roomLink);
+            }
+        }
+
+        fallbackCopyToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                document.execCommand('copy');
+                this.showNotification('Room link copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                prompt('Copy this room link:', text);
+            }
+
+            document.body.removeChild(textArea);
+        }
+
+        showLocalPlaceholder() {
+            const localWrapper = document.querySelector('.video-wrapper.local');
+            if (localWrapper) {
+                const video = localWrapper.querySelector('video');
+                const placeholder = localWrapper.querySelector('.video-placeholder');
+
+                if (video && placeholder) {
+                    video.style.display = 'none';
+                    placeholder.style.display = 'flex';
+                }
+            }
+        }
+
+        hideLocalPlaceholder() {
+            const localWrapper = document.querySelector('.video-wrapper.local');
+            if (localWrapper) {
+                const video = localWrapper.querySelector('video');
+                const placeholder = localWrapper.querySelector('.video-placeholder');
+
+                if (video && placeholder) {
+                    video.style.display = 'block';
+                    placeholder.style.display = 'none';
+                }
+            }
+        }
+
+        async leaveRoom() {
+            console.log('👋 Leaving room...');
+
+            if (this.room) {
+                await this.room.disconnect();
+            }
+
+            // Stop all local tracks
+            this.localTracks.forEach(track => {
+                track.stop();
+            });
+
+            // Redirect to home
+            window.location.href = '/';
+        }
+
+        showJoinScreen() {
+            document.getElementById('joinScreen').style.display = 'flex';
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('videoContainer').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        showLoading(message = 'Loading...') {
+            document.getElementById('loadingText').textContent = message;
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'flex';
+            document.getElementById('videoContainer').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        showVideoCall() {
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('videoContainer').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        showError(title, message) {
+            console.error(`❌ ${title}:`, message);
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('videoContainer').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+
+        showNotification(message) {
+            console.log('📢', message);
+            // Simple notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(76, 175, 80, 0.9);
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-size: 14px;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease forwards';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        getInitials(name) {
+            return name
+                .split(' ')
+                .map(word => word.charAt(0))
+                .join('')
+                .toUpperCase()
+                .substring(0, 2);
+        }
+    }
+</script>
+
+<!-- Add CSS animations for notifications -->
+<style>
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+</style>
+</body>
+</html>
