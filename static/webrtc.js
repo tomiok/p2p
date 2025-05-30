@@ -217,6 +217,16 @@ class VideoCall {
                     this.handlePeerLeft(message.peer_id);
                     break;
 
+                case 'user_media_changed':
+                    // Actualizar estado de media de otros usuarios
+                    this.handleUserMediaChanged(message);
+                    break;
+
+                case 'connection_quality_warning':
+                    // Manejar advertencias de calidad de conexión
+                    this.handleQualityWarning(message);
+                    break;
+
                 case 'offer':
                     await this.handleOffer(message);
                     break;
@@ -234,6 +244,32 @@ class VideoCall {
             }
         } catch (error) {
             console.error('Error manejando mensaje de signaling:', error);
+        }
+    }
+
+    handleUserMediaChanged(message) {
+        const { peerId, micOn, camOn } = message.data;
+
+        // No procesar nuestros propios cambios
+        if (peerId === this.myPeerId) {
+            return;
+        }
+
+        this.log(`📺 ${peerId} cambió estado: mic=${micOn}, cam=${camOn}`);
+
+        // Actualizar iconos de estado visual
+        this.updateVideoStatus(peerId, micOn, camOn);
+    }
+
+    handleQualityWarning(message) {
+        const { reason, suggestion, from } = message.data;
+
+        this.log(`⚠️ Advertencia de calidad de ${from}: ${reason}, sugerencia: ${suggestion}`);
+
+        // Ejemplo: reducir calidad automáticamente si es sugerido
+        if (suggestion === 'reduce_quality') {
+            this.log('🔧 Reduciendo calidad de video automáticamente');
+            // Aquí podrías implementar lógica para reducir bitrate, resolución, etc.
         }
     }
 
@@ -680,6 +716,39 @@ class VideoCall {
         });
     }
 
+    // Ejemplo de mensaje a múltiples peers específicos
+    notifySlowPeers(slowPeerIds, reason) {
+        if (slowPeerIds.length === 0) return;
+
+        this.log(`📤 Notificando a peers lentos sobre optimización:`, slowPeerIds);
+
+        // Enviar solo a peers específicos que tienen problemas
+        this.sendSignalingMessage({
+            type: 'connection_quality_warning',
+            data: {
+                reason: reason,
+                suggestion: 'reduce_quality',
+                from: this.myPeerId
+            },
+            target: slowPeerIds  // ← Array de peer IDs específicos
+        });
+    }
+
+    // Ejemplo de mensaje a todos excepto algunos
+    notifyAllExcept(excludePeerIds, messageType, data) {
+        // Obtener todos los peer IDs conectados
+        const allPeerIds = Array.from(this.peers.keys());
+        const targetPeerIds = allPeerIds.filter(peerId => !excludePeerIds.includes(peerId));
+
+        if (targetPeerIds.length === 0) return;
+
+        this.sendSignalingMessage({
+            type: messageType,
+            data: data,
+            target: targetPeerIds  // ← Solo a peers específicos
+        });
+    }
+
     updateLayout() {
         const container = document.getElementById('videoContainer');
         const participantCount = container.children.length;
@@ -725,8 +794,28 @@ class VideoCall {
 
     sendSignalingMessage(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.log('Enviando mensaje:', message.type, 'a:', message.target);
-            this.ws.send(JSON.stringify(message));
+            // Preparar mensaje para múltiples targets
+            const msg = { ...message };
+
+            // Manejar diferentes tipos de targets
+            if (Array.isArray(msg.target)) {
+                // Array de targets específicos
+                msg.targets = msg.target;
+                delete msg.target;
+                this.log('Enviando mensaje:', msg.type, 'a múltiples targets:', msg.targets);
+            } else if (msg.target === 'all') {
+                // Broadcast a todos
+                delete msg.target;
+                this.log('Enviando mensaje broadcast:', msg.type, 'a toda la sala');
+            } else if (msg.target) {
+                // Target único (comportamiento actual)
+                this.log('Enviando mensaje:', msg.type, 'a:', msg.target);
+            } else {
+                // Sin target = broadcast
+                this.log('Enviando mensaje broadcast:', msg.type);
+            }
+
+            this.ws.send(JSON.stringify(msg));
         } else {
             this.log('WebSocket no está conectado');
         }
@@ -772,8 +861,19 @@ class VideoCall {
         micBtn.textContent = this.isMicOn ? '🎤' : '🔇';
         micBtn.classList.toggle('active', !this.isMicOn);
 
-        // Actualizar status visual
+        // Actualizar status visual local
         this.updateVideoStatus('local', this.isMicOn, this.isCamOn);
+
+        // Notificar a todos los peers sobre el cambio de estado (BROADCAST)
+        this.sendSignalingMessage({
+            type: 'user_media_changed',
+            data: {
+                peerId: this.myPeerId,
+                micOn: this.isMicOn,
+                camOn: this.isCamOn
+            },
+            target: 'all'  // ← Broadcast a todos
+        });
 
         this.log('Micrófono:', this.isMicOn ? 'activado' : 'desactivado');
     }
@@ -790,8 +890,19 @@ class VideoCall {
         camBtn.textContent = this.isCamOn ? '📹' : '📷';
         camBtn.classList.toggle('active', !this.isCamOn);
 
-        // Actualizar status visual
+        // Actualizar status visual local
         this.updateVideoStatus('local', this.isMicOn, this.isCamOn);
+
+        // Notificar a todos los peers sobre el cambio de estado (BROADCAST)
+        this.sendSignalingMessage({
+            type: 'user_media_changed',
+            data: {
+                peerId: this.myPeerId,
+                micOn: this.isMicOn,
+                camOn: this.isCamOn
+            },
+            target: 'all'  // ← Broadcast a todos
+        });
 
         this.log('Cámara:', this.isCamOn ? 'activada' : 'desactivada');
     }
