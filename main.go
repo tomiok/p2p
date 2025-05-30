@@ -321,31 +321,120 @@ func getRoomHTML(roomId string) string {
         }
         .video-container {
             flex: 1;
-            display: flex;
+            display: grid;
             gap: 10px;
             padding: 10px;
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
         }
+        
+        /* Layout para 1 persona */
+        .video-container.participants-1 {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
+        }
+        
+        /* Layout para 2 personas */
+        .video-container.participants-2 {
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr;
+        }
+        
+        /* Layout para 3-4 personas */
+        .video-container.participants-3,
+        .video-container.participants-4 {
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        
+        /* Layout para 5-6 personas */
+        .video-container.participants-5,
+        .video-container.participants-6 {
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        
+        /* Layout para 7+ personas */
+        .video-container.participants-7,
+        .video-container.participants-8,
+        .video-container.participants-9 {
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+        }
+        
         .video-wrapper {
-            flex: 1;
             position: relative;
             background: #000;
             border-radius: 8px;
             overflow: hidden;
+            min-height: 200px;
+            border: 2px solid transparent;
+            transition: border-color 0.3s ease;
         }
+        
+        .video-wrapper.speaking {
+            border-color: #28a745;
+            box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+        }
+        
+        .video-wrapper.local {
+            border-color: #667eea;
+        }
+        
         video {
             width: 100%%;
             height: 100%%;
             object-fit: cover;
         }
+        
         .video-label {
             position: absolute;
-            top: 10px;
+            bottom: 10px;
             left: 10px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             color: white;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .video-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .status-icon {
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .muted { color: #dc3545; }
+        .cam-off { color: #ffc107; }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .video-container.participants-2,
+            .video-container.participants-3,
+            .video-container.participants-4 {
+                grid-template-columns: 1fr;
+                grid-template-rows: repeat(auto, 1fr);
+            }
+            
+            .video-container.participants-5,
+            .video-container.participants-6,
+            .video-container.participants-7,
+            .video-container.participants-8,
+            .video-container.participants-9 {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: repeat(auto, 1fr);
+            }
         }
         .controls {
             background: #2d2d2d;
@@ -386,15 +475,8 @@ func getRoomHTML(roomId string) string {
         <div id="status" class="status connecting">Conectando...</div>
     </div>
     
-    <div class="video-container">
-        <div class="video-wrapper">
-            <video id="localVideo" autoplay muted playsinline></video>
-            <div class="video-label">Tú</div>
-        </div>
-        <div class="video-wrapper">
-            <video id="remoteVideo" autoplay playsinline></video>
-            <div class="video-label">Invitado</div>
-        </div>
+    <div class="video-container" id="videoContainer">
+        <!-- Los videos se agregarán dinámicamente aquí -->
     </div>
     
     <div class="controls">
