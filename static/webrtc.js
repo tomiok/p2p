@@ -14,22 +14,22 @@ class VideoCall {
         this.stunServerTiers = [
             // Tier 1 - Más confiables
             [
-                { urls: 'stun:openrelay.metered.ca:80' },
-                { urls: 'stun:stunserver2024.stunprotocol.org:3478' },
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                {urls: 'stun:openrelay.metered.ca:80'},
+                {urls: 'stun:stunserver2024.stunprotocol.org:3478'},
+                {urls: 'stun:stun.l.google.com:19302'},
+                {urls: 'stun:stun1.l.google.com:19302'}
             ],
             // Tier 2 - Confiables con buena distribución
             [
-                { urls: 'stun:stun.cloudflare.com:3478' },
-                { urls: 'stun:stun.mozilla.org:3478' },
-                { urls: 'stun:stun.nextcloud.com:443' },
-                { urls: 'stun:stun.3cx.com:3478' }
+                {urls: 'stun:stun.cloudflare.com:3478'},
+                {urls: 'stun:stun.mozilla.org:3478'},
+                {urls: 'stun:stun.nextcloud.com:443'},
+                {urls: 'stun:stun.3cx.com:3478'}
             ],
             // Tier 3 - Alternativas robustas
             [
-                { urls: 'stun:stun.antisip.com:3478' },
-                { urls: 'stun:stun.voipbuster.com:3478' }
+                {urls: 'stun:stun.antisip.com:3478'},
+                {urls: 'stun:stun.voipbuster.com:3478'}
             ]
         ];
 
@@ -57,19 +57,23 @@ class VideoCall {
         }
     }
 
-    // === NUEVAS FUNCIONES PARA MANEJO DE NOMBRES (SIMPLIFICADAS) ===
-
     /**
      * Obtener nombre para mostrar
      */
     getDisplayName(peerId, isLocal = false) {
         if (isLocal) {
-            return `${this.userName} (Tú)`;
+            return `${this.userName || 'Tú'} (Tú)`;
         }
 
         // Buscar nombre en nuestro mapa
         const name = this.peerNames.get(peerId);
-        return name || `Participante ${peerId.slice(-4)}`;
+        if (name) {
+            return name;
+        }
+
+        // ✅ FIX: Mejor fallback con timestamp para debug
+        const shortId = peerId.slice(-4);
+        return `Participante ${shortId}`;
     }
 
     /**
@@ -111,7 +115,7 @@ class VideoCall {
                 return;
             }
 
-            switch(e.key.toLowerCase()) {
+            switch (e.key.toLowerCase()) {
                 case 'm':
                     e.preventDefault();
                     this.toggleMic();
@@ -145,7 +149,7 @@ class VideoCall {
             this.signalingUrl = config.signalingUrl;
 
             if (config.stunServers) {
-                this.config.iceServers = config.stunServers.map(url => ({ urls: url }));
+                this.config.iceServers = config.stunServers.map(url => ({urls: url}));
             }
 
         } catch (error) {
@@ -162,8 +166,8 @@ class VideoCall {
 
             this.localStream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: {ideal: 1280},
+                    height: {ideal: 720},
                     facingMode: 'user'
                 },
                 audio: {
@@ -188,9 +192,10 @@ class VideoCall {
 
     connectSignaling() {
         return new Promise((resolve, reject) => {
-            // ← SOLUCIONADO: NO incluir nombre en URL, enviarlo después
-            const wsUrl = `${this.signalingUrl}/${this.roomId}`;
-            this.log('Conectando a WebSocket:', wsUrl, 'con nombre:', this.userName);
+            // Incluir nombre en la URL para envío inmediato
+            const encodedName = encodeURIComponent(this.userName || '');
+            const wsUrl = `${this.signalingUrl}/${this.roomId}?name=${encodedName}`;
+            this.log('Conectando a WebSocket:', wsUrl);
 
             try {
                 this.ws = new WebSocket(wsUrl);
@@ -212,13 +217,15 @@ class VideoCall {
                 this.log('WebSocket conectado exitosamente');
                 clearTimeout(timeout);
 
-                // ← NUEVO: Enviar nombre después de conectar
-                this.sendSignalingMessage({
-                    type: 'set_user_name',
-                    data: {
-                        name: this.userName
-                    }
-                });
+                // ✅ FIX: Enviar nombre inmediatamente después de conectar (redundancia)
+                if (this.userName) {
+                    this.sendSignalingMessage({
+                        type: 'set_user_name',
+                        data: {
+                            name: this.userName
+                        }
+                    });
+                }
 
                 resolve();
             };
@@ -261,21 +268,37 @@ class VideoCall {
                     if (message.data && message.data.participant_count) {
                         this.serverParticipantCount = message.data.participant_count;
                     }
+
+                    // ✅ FIX: Procesar nombres existentes si vienen en el mensaje
+                    if (message.data && message.data.existing_peers) {
+                        message.data.existing_peers.forEach(peer => {
+                            if (peer.id !== this.myPeerId && peer.name) {
+                                this.setPeerName(peer.id, peer.name);
+                                this.log(`📛 Nombre existente cargado: ${peer.id} -> ${peer.name}`);
+                            }
+                        });
+                    }
+
                     this.log('Mi peer ID:', this.myPeerId, 'Participantes en servidor:', this.serverParticipantCount);
                     this.updateParticipantCount();
                     break;
 
                 case 'peer_joined':
-                    // Actualizar conteo del servidor si viene en el mensaje
+                    // ✅ FIX: Verificar si el mensaje incluye el nombre del peer
                     if (message.data && message.data.participant_count) {
                         this.serverParticipantCount = message.data.participant_count;
-                        this.log('Conteo actualizado del servidor:', this.serverParticipantCount);
                     }
+
+                    // Si el mensaje incluye el nombre, guardarlo inmediatamente
+                    if (message.data && message.data.peer_name) {
+                        this.setPeerName(message.peer_id, message.data.peer_name);
+                        this.log(`📛 Nombre recibido con peer_joined: ${message.peer_id} -> ${message.data.peer_name}`);
+                    }
+
                     await this.handlePeerJoined(message.peer_id);
                     break;
 
                 case 'user_name_set':
-                    // ← NUEVO: Manejar cuando un usuario establece su nombre
                     this.handleUserNameSet(message);
                     break;
 
@@ -319,7 +342,7 @@ class VideoCall {
     }
 
     handleUserNameSet(message) {
-        const { peerId, name } = message.data;
+        const {peerId, name} = message.data;
 
         // No procesar nuestro propio nombre
         if (peerId === this.myPeerId) {
@@ -340,12 +363,16 @@ class VideoCall {
             if (label) {
                 label.textContent = name;
                 this.log(`🏷️ Label actualizado para ${peerId}: ${name}`);
+            } else {
+                this.log(`⚠️ No se encontró label para ${peerId}`);
             }
+        } else {
+            this.log(`⚠️ No se encontró wrapper para ${peerId}`);
         }
     }
 
     handleUserMediaChanged(message) {
-        const { peerId, micOn, camOn } = message.data;
+        const {peerId, micOn, camOn} = message.data;
 
         // No procesar nuestros propios cambios
         if (peerId === this.myPeerId) {
@@ -359,7 +386,7 @@ class VideoCall {
     }
 
     handleQualityWarning(message) {
-        const { reason, suggestion, from } = message.data;
+        const {reason, suggestion, from} = message.data;
 
         this.log(`⚠️ Advertencia de calidad de ${from}: ${reason}, sugerencia: ${suggestion}`);
 
@@ -674,13 +701,27 @@ class VideoCall {
             return;
         }
 
+        // ✅ FIX: Verificar si ya existe un video antes de agregarlo
+        const existingVideo = wrapper.querySelector('video');
+        if (existingVideo) {
+            this.log(`⚠️ Video ya existe para ${peerId}, actualizando stream`);
+            existingVideo.srcObject = stream;
+            // Remover spinner si existe
+            const spinner = wrapper.querySelector('.connection-spinner');
+            if (spinner) {
+                spinner.remove();
+            }
+            wrapper.classList.remove('connecting');
+            return;
+        }
+
         // Remover spinner
         const spinner = wrapper.querySelector('.connection-spinner');
         if (spinner) {
             spinner.remove();
         }
 
-        // Agregar video
+        // Agregar video (solo si no existe)
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
@@ -699,42 +740,64 @@ class VideoCall {
         wrapper.insertBefore(video, wrapper.firstChild);
         wrapper.classList.remove('connecting');
 
-        this.log(`Spinner reemplazado con video para ${peerId}`);
+        this.log(`✅ Spinner reemplazado con video para ${peerId}`);
     }
 
     addVideoToUI(peerId, stream, label, isLocal = false) {
-        // Verificar que no existe ya
-        if (document.getElementById(`video-${peerId}`)) {
+        const existingWrapper = document.getElementById(`video-${peerId}`);
+        if (existingWrapper) {
             this.log(`Video para ${peerId} ya existe, actualizando stream`);
-            const existingVideo = document.querySelector(`#video-${peerId} video`);
+
+            // Verificar si ya tiene video
+            const existingVideo = existingWrapper.querySelector('video');
             if (existingVideo) {
                 existingVideo.srcObject = stream;
-                // Remover spinner si existe
-                this.removeSpinner(peerId);
+            } else {
+                // Si no tiene video, crearlo
+                const video = document.createElement('video');
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = isLocal;
+                video.srcObject = stream;
+
+                // Insertar antes del label
+                const label = existingWrapper.querySelector('.video-label');
+                if (label) {
+                    existingWrapper.insertBefore(video, label);
+                } else {
+                    existingWrapper.insertBefore(video, existingWrapper.firstChild);
+                }
             }
+
+            // Remover spinner si existe
+            this.removeSpinner(peerId);
+            existingWrapper.classList.remove('connecting');
+
+            // Actualizar label con nombre correcto
+            const labelEl = existingWrapper.querySelector('.video-label');
+            if (labelEl && label) {
+                labelEl.textContent = label;
+            }
+
             return;
         }
 
         const container = document.getElementById('videoContainer');
 
-        // Crear wrapper del video
         const wrapper = document.createElement('div');
         wrapper.className = `video-wrapper ${isLocal ? 'local' : ''}`;
         wrapper.id = `video-${peerId}`;
 
-        // Crear elemento video
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
-        video.muted = isLocal; // Solo mutear nuestro propio audio
+        video.muted = isLocal;
         video.srcObject = stream;
 
-        // Crear label
         const labelEl = document.createElement('div');
         labelEl.className = 'video-label';
         labelEl.textContent = label;
 
-        // Crear status icons
         const statusEl = document.createElement('div');
         statusEl.className = 'video-status';
         statusEl.id = `status-${peerId}`;
@@ -747,7 +810,7 @@ class VideoCall {
 
         this.updateLayout();
 
-        this.log(`Video agregado para ${peerId} (${label})`);
+        this.log(`✅ Video agregado para ${peerId} (${label})`);
     }
 
     removeVideoFromUI(peerId) {
@@ -860,7 +923,7 @@ class VideoCall {
     sendSignalingMessage(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             // Preparar mensaje para múltiples targets
-            const msg = { ...message };
+            const msg = {...message};
 
             // Manejar diferentes tipos de targets
             if (Array.isArray(msg.target)) {
