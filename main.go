@@ -370,6 +370,9 @@ func getRoomHTML(roomId string) string {
             min-height: 200px;
             border: 2px solid transparent;
             transition: border-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .video-wrapper.speaking {
@@ -379,6 +382,27 @@ func getRoomHTML(roomId string) string {
         
         .video-wrapper.local {
             border-color: #667eea;
+        }
+
+        .video-wrapper.connecting {
+            border-color: #ffc107;
+        }
+
+        /* === NUEVOS ESTILOS PARA CONTROLES === */
+        .video-wrapper.cam-off video {
+            display: none;
+        }
+
+        .video-wrapper.cam-off::after {
+            content: '📷';
+            font-size: 4rem;
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
         }
         
         video {
@@ -417,6 +441,33 @@ func getRoomHTML(roomId string) string {
         
         .muted { color: #dc3545; }
         .cam-off { color: #ffc107; }
+
+        /* === ESTILOS PARA SPINNERS === */
+        .connection-spinner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .spinner-circle {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%%;
+            animation: spin 1s linear infinite;
+        }
+
+        .spinner-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes spin {
+            0%% { transform: rotate(0deg); }
+            100%% { transform: rotate(360deg); }
+        }
         
         /* Responsive design */
         @media (max-width: 768px) {
@@ -456,9 +507,24 @@ func getRoomHTML(roomId string) string {
             align-items: center;
             justify-content: center;
             transition: background 0.2s;
+            font-size: 1.2rem;
         }
-        .control-btn:hover { background: #555; }
-        .control-btn.active { background: #dc3545; }
+        .control-btn:hover { 
+            background: #555; 
+            transform: scale(1.05);
+        }
+
+        /* === NUEVOS ESTILOS PARA BOTONES ACTIVOS === */
+        .control-btn.active { 
+            background: #dc3545 !important;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%%, 100%% { opacity: 1; }
+            50%% { opacity: 0.7; }
+        }
+
         .status {
             color: white;
             text-align: center;
@@ -467,6 +533,25 @@ func getRoomHTML(roomId string) string {
         .connecting { color: #ffc107; }
         .connected { color: #28a745; }
         .error { color: #dc3545; }
+
+        /* === INDICADOR DE TECLAS DE ACCESO RÁPIDO === */
+        .shortcuts-hint {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            backdrop-filter: blur(10px);
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .shortcuts-hint:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -480,15 +565,27 @@ func getRoomHTML(roomId string) string {
     </div>
     
     <div class="controls">
-        <button id="micBtn" class="control-btn" onclick="toggleMic()">🎤</button>
-        <button id="camBtn" class="control-btn" onclick="toggleCam()">📹</button>
-        <button id="hangupBtn" class="control-btn" onclick="hangup()">📞</button>
+        <button id="micBtn" class="control-btn" onclick="toggleMic()" title="Alternar micrófono (M)">🎤</button>
+        <button id="camBtn" class="control-btn" onclick="toggleCam()" title="Alternar cámara (V)">📹</button>
+        <button id="hangupBtn" class="control-btn" onclick="hangup()" title="Colgar llamada (H)">📞</button>
+    </div>
+
+    <!-- Indicador de teclas de acceso rápido -->
+    <div class="shortcuts-hint">
+        💡 Teclas: M (mic), V (video), H (colgar)
     </div>
 
     <script src="/static/webrtc.js"></script>
     <script>
         const roomId = '%s';
+        
+        // === INICIALIZACIÓN EXACTAMENTE COMO EN TU CÓDIGO ORIGINAL ===
         const videoCall = new VideoCall(roomId);
+        
+        // Exponer globalmente para los botones
+        window.videoCall = videoCall;
+        
+        // Inicializar
         videoCall.init();
     </script>
 </body>

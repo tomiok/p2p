@@ -1,4 +1,4 @@
-// webrtc.js - Multi-participant con spinner mejorado
+// webrtc.js - Multi-participant con controles reales funcionando
 class VideoCall {
     constructor(roomId) {
         this.roomId = roomId;
@@ -45,6 +45,9 @@ class VideoCall {
         this.isMicOn = true;
         this.isCamOn = true;
         this.debug = true;
+
+        // === NUEVAS PROPIEDADES PARA CONTROLES ===
+        this.isHangingUp = false;
     }
 
     log(...args) {
@@ -68,10 +71,39 @@ class VideoCall {
             this.updateStatus('Esperando a otros participantes...', 'connecting');
             this.log('Inicialización completa');
 
+            // === CONFIGURAR CONTROLES SIN INTERFERIR CON LA LÓGICA ORIGINAL ===
+            this.setupKeyboardShortcuts();
+
         } catch (error) {
             console.error('Error inicializando:', error);
             this.updateStatus('Error: ' + error.message, 'error');
         }
+    }
+
+    // === CONFIGURAR TECLAS DE ACCESO RÁPIDO SIN INTERFERIR ===
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            switch(e.key.toLowerCase()) {
+                case 'm':
+                    e.preventDefault();
+                    this.toggleMic();
+                    break;
+                case 'v':
+                    e.preventDefault();
+                    this.toggleCam();
+                    break;
+                case 'h':
+                    e.preventDefault();
+                    this.hangup();
+                    break;
+            }
+        });
+
+        this.log('✅ Teclas de acceso rápido configuradas');
     }
 
     async loadConfig() {
@@ -171,7 +203,7 @@ class VideoCall {
                 this.log('WebSocket cerrado:', event.code, event.reason);
                 clearTimeout(timeout);
 
-                if (event.code !== 1000) {
+                if (event.code !== 1000 && !this.isHangingUp) {
                     this.updateStatus('Conexión perdida con el servidor', 'error');
                 }
             };
@@ -557,18 +589,6 @@ class VideoCall {
         this.log(`Spinner agregado para ${peerId} (${label})`);
     }
 
-    removeSpinner(peerId) {
-        const wrapper = document.getElementById(`video-${peerId}`);
-        if (wrapper) {
-            const spinner = wrapper.querySelector('.connection-spinner');
-            if (spinner) {
-                spinner.remove();
-                wrapper.classList.remove('connecting');
-                this.log(`Spinner removido para ${peerId}`);
-            }
-        }
-    }
-
     replaceSpinnerWithVideo(peerId, stream, label) {
         const wrapper = document.getElementById(`video-${peerId}`);
         if (!wrapper) {
@@ -716,39 +736,6 @@ class VideoCall {
         });
     }
 
-    // Ejemplo de mensaje a múltiples peers específicos
-    notifySlowPeers(slowPeerIds, reason) {
-        if (slowPeerIds.length === 0) return;
-
-        this.log(`📤 Notificando a peers lentos sobre optimización:`, slowPeerIds);
-
-        // Enviar solo a peers específicos que tienen problemas
-        this.sendSignalingMessage({
-            type: 'connection_quality_warning',
-            data: {
-                reason: reason,
-                suggestion: 'reduce_quality',
-                from: this.myPeerId
-            },
-            target: slowPeerIds  // ← Array de peer IDs específicos
-        });
-    }
-
-    // Ejemplo de mensaje a todos excepto algunos
-    notifyAllExcept(excludePeerIds, messageType, data) {
-        // Obtener todos los peer IDs conectados
-        const allPeerIds = Array.from(this.peers.keys());
-        const targetPeerIds = allPeerIds.filter(peerId => !excludePeerIds.includes(peerId));
-
-        if (targetPeerIds.length === 0) return;
-
-        this.sendSignalingMessage({
-            type: messageType,
-            data: data,
-            target: targetPeerIds  // ← Solo a peers específicos
-        });
-    }
-
     updateLayout() {
         const container = document.getElementById('videoContainer');
         const participantCount = container.children.length;
@@ -823,8 +810,10 @@ class VideoCall {
 
     updateStatus(message, type) {
         const statusEl = document.getElementById('status');
-        statusEl.textContent = message;
-        statusEl.className = `status ${type}`;
+        if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
         this.log('Status actualizado:', message);
     }
 
@@ -849,17 +838,27 @@ class VideoCall {
         }
     }
 
+    // === FUNCIONALIDADES REALES DE CONTROL ===
+
     toggleMic() {
+        if (this.isHangingUp || !this.localStream) return;
+
         this.isMicOn = !this.isMicOn;
+        this.log(`🎤 Toggling micrófono: ${this.isMicOn ? 'ON' : 'OFF'}`);
 
-        const audioTrack = this.localStream.getAudioTracks()[0];
-        if (audioTrack) {
-            audioTrack.enabled = this.isMicOn;
-        }
+        // Control REAL de audio tracks
+        const audioTracks = this.localStream.getAudioTracks();
+        audioTracks.forEach(track => {
+            track.enabled = this.isMicOn;
+            this.log(`🎤 Audio track ${track.enabled ? 'habilitado' : 'deshabilitado'}`);
+        });
 
+        // Actualizar UI del botón
         const micBtn = document.getElementById('micBtn');
-        micBtn.textContent = this.isMicOn ? '🎤' : '🔇';
-        micBtn.classList.toggle('active', !this.isMicOn);
+        if (micBtn) {
+            micBtn.textContent = this.isMicOn ? '🎤' : '🔇';
+            micBtn.classList.toggle('active', !this.isMicOn);
+        }
 
         // Actualizar status visual local
         this.updateVideoStatus('local', this.isMicOn, this.isCamOn);
@@ -879,16 +878,30 @@ class VideoCall {
     }
 
     toggleCam() {
-        this.isCamOn = !this.isCamOn;
+        if (this.isHangingUp || !this.localStream) return;
 
-        const videoTrack = this.localStream.getVideoTracks()[0];
-        if (videoTrack) {
-            videoTrack.enabled = this.isCamOn;
+        this.isCamOn = !this.isCamOn;
+        this.log(`📹 Toggling cámara: ${this.isCamOn ? 'ON' : 'OFF'}`);
+
+        // Control REAL de video tracks
+        const videoTracks = this.localStream.getVideoTracks();
+        videoTracks.forEach(track => {
+            track.enabled = this.isCamOn;
+            this.log(`📹 Video track ${track.enabled ? 'habilitado' : 'deshabilitado'}`);
+        });
+
+        // Actualizar UI del botón
+        const camBtn = document.getElementById('camBtn');
+        if (camBtn) {
+            camBtn.textContent = this.isCamOn ? '📹' : '📷';
+            camBtn.classList.toggle('active', !this.isCamOn);
         }
 
-        const camBtn = document.getElementById('camBtn');
-        camBtn.textContent = this.isCamOn ? '📹' : '📷';
-        camBtn.classList.toggle('active', !this.isCamOn);
+        // Actualizar wrapper visual para mostrar/ocultar video
+        const localWrapper = document.getElementById('video-local');
+        if (localWrapper) {
+            localWrapper.classList.toggle('cam-off', !this.isCamOn);
+        }
 
         // Actualizar status visual local
         this.updateVideoStatus('local', this.isMicOn, this.isCamOn);
@@ -908,29 +921,53 @@ class VideoCall {
     }
 
     hangup() {
-        this.log('Colgando llamada...');
+        if (this.isHangingUp) return;
+
+        this.log('📞 Iniciando hangup...');
+
+        // Mostrar confirmación SOLO si hay otros participantes
+        if (this.serverParticipantCount > 1) {
+            if (!confirm('¿Estás seguro de que quieres colgar la llamada?')) {
+                return;
+            }
+        }
+
+        this.isHangingUp = true;
+        this.updateStatus('Colgando llamada...', 'error');
 
         // Cerrar todas las conexiones peer
         this.peers.forEach((peer, peerId) => {
             if (peer.pc) {
                 peer.pc.close();
+                this.log(`🔌 Conexión cerrada para ${peerId}`);
+            }
+            if (peer.connectionTimer) {
+                clearTimeout(peer.connectionTimer);
             }
         });
         this.peers.clear();
 
-        if (this.ws) {
-            this.ws.close();
+        // Cerrar WebSocket
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.close(1000, 'User hung up');
         }
 
+        // Detener todos los tracks de media
         if (this.localStream) {
-            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream.getTracks().forEach(track => {
+                track.stop();
+                this.log(`⏹️ Track detenido: ${track.kind}`);
+            });
         }
 
+        this.log('✅ Llamada colgada, redirigiendo...');
+
+        // Redirigir inmediatamente
         window.location.href = '/';
     }
 }
 
-// Funciones globales para los botones
+// === FUNCIONES GLOBALES PARA LOS BOTONES (MANTENER COMPATIBILIDAD EXACTA) ===
 function toggleMic() {
     if (window.videoCall) {
         window.videoCall.toggleMic();
@@ -949,5 +986,5 @@ function hangup() {
     }
 }
 
-// Exponer la instancia globalmente
+// Exponer la instancia globalmente EXACTAMENTE como en el código original
 window.VideoCall = VideoCall;
