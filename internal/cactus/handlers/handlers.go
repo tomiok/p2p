@@ -70,33 +70,6 @@ func (h *Handler) Room(w http.ResponseWriter, r *http.Request) {
 }
 
 // API Handlers
-func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	var req cactus.CreateRoomRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	room, err := h.roomService.CreateRoom(r.Context(), &req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create room: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Generate join URL
-	baseURL := h.getBaseURL(r)
-	joinURL := fmt.Sprintf("%s/?room=%s", baseURL, room.ID)
-
-	response := &cactus.RoomResponse{
-		Room:    room,
-		JoinURL: joinURL,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
-}
-
 func (h *Handler) GetRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := chi.URLParam(r, "roomID")
 	if roomID == "" {

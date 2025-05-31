@@ -715,11 +715,49 @@
             }
         }
 
+        // REEMPLAZA SOLO este método en tu código existente:
+
         async connectToLiveKit(wsUrl, token) {
             try {
                 console.log('🔌 Connecting to LiveKit...', { url: wsUrl });
 
-                // Create room with better configuration
+                // DEBUG: Verificar token
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    console.log('🎫 Token info:', {
+                        room: payload.video?.room,
+                        identity: payload.sub,
+                        exp: new Date(payload.exp * 1000)
+                    });
+                } catch (e) {
+                    console.warn('Could not parse token:', e);
+                }
+
+                // DEBUG: Test WebSocket primero
+                console.log('🌐 Testing WebSocket...');
+                const testWs = new WebSocket(wsUrl);
+
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        testWs.close();
+                        reject(new Error('WebSocket timeout'));
+                    }, 5000);
+
+                    testWs.onopen = () => {
+                        console.log('✅ WebSocket OK');
+                        clearTimeout(timeout);
+                        testWs.close();
+                        resolve();
+                    };
+
+                    testWs.onerror = (error) => {
+                        console.error('❌ WebSocket failed:', error);
+                        clearTimeout(timeout);
+                        reject(new Error('WebSocket connection failed'));
+                    };
+                });
+
+                // Crear room (tu código original)
                 this.room = new LiveKit.Room({
                     adaptiveStream: true,
                     dynacast: true,
@@ -735,21 +773,28 @@
                     },
                 });
 
-                // Setup room events
+                // Setup events (tu código original)
                 this.setupRoomEvents();
 
-                // Connect
+                // DEBUG: Conectar con más info
+                console.log('🎬 Attempting LiveKit connection...');
                 await this.room.connect(wsUrl, token);
                 console.log('✅ Connected to LiveKit room!');
 
-                // Publish local tracks
+                // Resto igual
                 await this.publishLocalTracks();
-
-                // Show video UI
                 this.showVideoCall();
 
             } catch (error) {
-                console.error('❌ Failed to connect to LiveKit:', error);
+                console.error('❌ Connection failed:', error);
+
+                // DEBUG: Mostrar error específico
+                if (error.message.includes('WebSocket')) {
+                    console.log('📋 WebSocket Error - Check if LiveKit server is running on', wsUrl);
+                } else if (error.message.includes('pc connection')) {
+                    console.log('📋 WebRTC Error - Possible firewall or STUN server issue');
+                }
+
                 throw error;
             }
         }

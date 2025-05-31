@@ -77,7 +77,6 @@ func setupRoutes(r *chi.Mux, h *handlers.Handler) {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
-		r.Post("/rooms", h.CreateRoom)
 		r.Get("/rooms/{roomID}", h.GetRoom)
 		r.Post("/rooms/{roomID}/join", h.JoinRoom)
 		r.Delete("/rooms/{roomID}", h.DeleteRoom)

@@ -66,44 +66,6 @@ func NewRoomService(cfg *config.Config) *RoomService {
 	}
 }
 
-func (s *RoomService) CreateRoom(ctx context.Context, req *CreateRoomRequest) (*Room, error) {
-	roomID := s.generateRoomID()
-
-	maxParticipants := req.MaxParticipants
-	if maxParticipants == 0 {
-		maxParticipants = 20
-	}
-
-	// Create room in LiveKit
-	livekitReq := &livekit.CreateRoomRequest{
-		Name:            roomID,
-		MaxParticipants: uint32(maxParticipants),
-		EmptyTimeout:    300, // 5 minutes
-	}
-
-	_, err := s.client.CreateRoom(ctx, livekitReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create LiveKit room: %w", err)
-	}
-
-	// Create room model
-	room := &Room{
-		ID:                 roomID,
-		Name:               req.Name,
-		CreatedAt:          time.Now(),
-		MaxParticipants:    maxParticipants,
-		ActiveParticipants: 0,
-		IsActive:           true,
-	}
-
-	// Store room
-	s.mu.Lock()
-	s.rooms[roomID] = room
-	s.mu.Unlock()
-
-	return room, nil
-}
-
 func (s *RoomService) GetRoom(ctx context.Context, roomID string) (*Room, error) {
 	s.mu.RLock()
 	room, exists := s.rooms[roomID]
